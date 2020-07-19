@@ -1,4 +1,4 @@
-/* rma_list.h - 0.1.0
+/* rma_list.h - 0.2.0
 **   Type-safe generic dynamic arrays for C.
 **
 **   Dual-licensed under MIT or the UNLICENSE.
@@ -96,10 +96,11 @@ typedef struct RMA_LIST__NAME {
 
 RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __clone)(RMA_LIST__NAME *dst, RMA_LIST__NAME *src);
 RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __extend_from_parts)(RMA_LIST__NAME *v, size_t len, const RMA_LIST__INNER *ptr);
-RMA_LIST__STORAGE void RMA__JOIN(RMA_LIST__NAME, __free)(RMA_LIST__NAME *v);
-RMA_LIST__STORAGE int RMA__JOIN(RMA_LIST__NAME, __pop )(RMA_LIST__NAME *v, RMA_LIST__INNER *out);
-RMA_LIST__STORAGE int RMA__JOIN(RMA_LIST__NAME, __push)(RMA_LIST__NAME *v, RMA_LIST__INNER elem);
-RMA_LIST__STORAGE int RMA__JOIN(RMA_LIST__NAME, __with_capacity)(RMA_LIST__NAME *out, size_t cap);
+RMA_LIST__STORAGE void RMA__JOIN(RMA_LIST__NAME, __free   )(RMA_LIST__NAME *v);
+RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __pop    )(RMA_LIST__NAME *v, RMA_LIST__INNER *out);
+RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __push   )(RMA_LIST__NAME *v, RMA_LIST__INNER elem);
+RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __reserve)(RMA_LIST__NAME *v, size_t cap);
+RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __with_capacity)(RMA_LIST__NAME *out, size_t cap);
 
 static RMA_LIST__INNER * RMA__UNUSED
 RMA__JOIN(RMA_LIST__NAME, __as_ptr)(RMA_LIST__NAME *v) {
@@ -159,31 +160,14 @@ RMA_LIST__STORAGE int RMA__JOIN(RMA_LIST__NAME, __clone)(RMA_LIST__NAME *dst, RM
 }
 
 RMA_LIST__STORAGE int RMA__JOIN(RMA_LIST__NAME, __extend_from_parts)(RMA_LIST__NAME *v, size_t len, const RMA_LIST__INNER *ptr) {
-    size_t new_len;
+    int err;
 
     if (v->len > RMA_LIST__CAP_MAX - len) {
         return RMA__ENOMEM;
     }
-    new_len = v->len + len;
-    if (new_len > v->cap) {
-        RMA_LIST__INNER *ptr_tmp;
-        size_t           cap_new;
-
-        if (new_len > RMA_LIST__CAP_MAX / 2) {
-            cap_new = RMA_LIST__CAP_MAX;
-        } else {
-            cap_new = v->cap ? v->cap : 1;
-            while (cap_new < new_len) {
-                cap_new *= 2;
-            }
-        }
-        ptr_tmp = v->cap ? v->ptr : NULL;
-        ptr_tmp = RMA_LIST__REALLOC(ptr_tmp, cap_new * sizeof(RMA_LIST__INNER));
-        if (!ptr_tmp) {
-            return RMA__ENOMEM;
-        }
-        v->ptr = ptr_tmp;
-        v->cap = cap_new;
+    err = RMA__JOIN(RMA_LIST__NAME, __reserve)(v, v->len + len);
+    if (err) {
+        return err;
     }
     memcpy(v->ptr + v->len, ptr, len);
     v->len += len;
@@ -212,27 +196,45 @@ RMA_LIST__STORAGE int RMA__JOIN(RMA_LIST__NAME, __pop)(RMA_LIST__NAME *v, RMA_LI
 }
 
 RMA_LIST__STORAGE int RMA__JOIN(RMA_LIST__NAME, __push)(RMA_LIST__NAME *v, RMA_LIST__INNER elem) {
-    if (v->len >= v->cap) {   
-        RMA_LIST__INNER *ptr_tmp;  
-        size_t           cap_new;
+    int err;
 
-        if (v->cap <= RMA_LIST__CAP_MAX / 2) {  
-            cap_new = v->cap ? 2 * v->cap : 1;
-        } else if (v->cap < RMA_LIST__CAP_MAX) {     
-            cap_new = RMA_LIST__CAP_MAX;
-        } else {       
-            return RMA__ENOMEM;
-        }
-        ptr_tmp = v->cap ? v->ptr : NULL;
-        ptr_tmp = RMA_LIST__REALLOC(ptr_tmp, cap_new * sizeof(RMA_LIST__INNER));
-        if (!ptr_tmp) {
-            return RMA__ENOMEM;
-        }
-        v->ptr = ptr_tmp;
-        v->cap = cap_new;
+    if (v->len > RMA_LIST__CAP_MAX - 1) {
+        return RMA__ENOMEM;
+    }
+    err = RMA__JOIN(RMA_LIST__NAME, __reserve)(v, v->len + 1);
+    if (err) {
+        return err;
     }
     v->ptr[v->len] = elem;
     v->len++;
+    return 0;
+}
+
+RMA_LIST__STORAGE int RMA__JOIN(RMA_LIST__NAME, __reserve)(RMA_LIST__NAME *v, size_t cap) {
+    RMA_LIST__INNER *ptr_tmp;  
+    size_t           cap_new;
+
+    if (cap <= v->cap) {
+        return 0;
+    }
+    if (cap > RMA_LIST__CAP_MAX) {
+        return RMA__ENOMEM;
+    }
+    if (cap > RMA_LIST__CAP_MAX / 2) {
+        cap_new = RMA_LIST__CAP_MAX;
+    } else {
+        cap_new = v->cap ? v->cap : 1;
+        while (cap_new < cap) {
+            cap_new *= 2;
+        }
+    }
+    ptr_tmp = v->cap ? v->ptr : NULL;
+    ptr_tmp = RMA_LIST__REALLOC(ptr_tmp, cap_new * sizeof(RMA_LIST__INNER));
+    if (!ptr_tmp) {
+        return RMA__ENOMEM;
+    }
+    v->ptr = ptr_tmp;
+    v->cap = cap_new;
     return 0;
 }
 
