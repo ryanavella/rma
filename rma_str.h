@@ -22,8 +22,13 @@
 **     }
 */
 
-#include <string.h> /* memcpy */
+#include <string.h> /* memcpy, strcpy, strlen */
 #include <stddef.h> /* size_t */
+
+#ifdef _MSC_VER
+/* ignore MSVC deprecation warnings */
+#  pragma warning(disable: 4996)
+#endif
 
 #ifndef RMA_STR__STORAGE
 #  define RMA_STR__STORAGE
