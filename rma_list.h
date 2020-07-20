@@ -1,4 +1,4 @@
-/* rma_list.h - 0.3.0
+/* rma_list.h - 0.3.1
 **   Type-safe generic dynamic arrays for C.
 **
 **   Dual-licensed under MIT or the UNLICENSE.
@@ -109,6 +109,7 @@ RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __clone )(RMA_LIST__NAME *dst, 
 RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __extend)(RMA_LIST__NAME *v, RMA_LIST__NAME *other);
 RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __extend_from_parts)(RMA_LIST__NAME *v, size_t len, const RMA_LIST__INNER *ptr);
 RMA_LIST__STORAGE void RMA__JOIN(RMA_LIST__NAME, __free   )(RMA_LIST__NAME *v);
+RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __insert )(RMA_LIST__NAME *v, size_t pos, RMA_LIST__INNER elem);
 RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __pop    )(RMA_LIST__NAME *v, RMA_LIST__INNER *out);
 RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __push   )(RMA_LIST__NAME *v, RMA_LIST__INNER elem);
 RMA_LIST__STORAGE int  RMA__JOIN(RMA_LIST__NAME, __reserve)(RMA_LIST__NAME *v, size_t cap);
@@ -230,7 +231,7 @@ RMA_LIST__STORAGE int RMA__JOIN(RMA_LIST__NAME, __push)(RMA_LIST__NAME *v, RMA_L
 }
 
 RMA_LIST__STORAGE int RMA__JOIN(RMA_LIST__NAME, __reserve)(RMA_LIST__NAME *v, size_t cap) {
-    RMA_LIST__INNER *ptr_tmp;  
+    RMA_LIST__INNER *ptr_tmp;
     size_t           cap_new;
 
     if (cap <= v->cap) {
