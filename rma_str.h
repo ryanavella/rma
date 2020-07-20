@@ -1,4 +1,4 @@
-/* rma_str.h - 0.1.0
+/* rma_str.h - 0.2.0
 **   Safer null-terminated string type for C.
 **
 **   Dual-licensed under MIT or the UNLICENSE.
@@ -22,8 +22,9 @@
 **     }
 */
 
-#include <string.h> /* memcpy, strcpy, strlen */
+#include <errno.h>  /* ENOMEM */
 #include <stddef.h> /* size_t */
+#include <string.h> /* memcpy, strcpy, strlen */
 
 #ifdef _MSC_VER
 /* ignore MSVC deprecation warnings */
@@ -76,9 +77,19 @@
 #  endif
 #endif
 
-#ifndef RMA__ENOMEM
-#  define RMA__ENOMEM 12
+#ifndef RMA_STR__ENOMEM
+#  ifdef ENOMEM
+#    define RMA_STR__ENOMEM ENOMEM
+#  else
+#    define RMA_STR__ENOMEM 12
+#  endif
 #endif
+
+#undef RMA__OOM
+#undef RMA__OOB
+
+#define RMA__OOM RMA_STR__ENOMEM /* out of memory */
+#define RMA__OOB -1               /* out of bounds */
 
 typedef struct RMA_STR__NAME {
     char  *ptr;
@@ -89,9 +100,13 @@ typedef struct RMA_STR__NAME {
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __clone)(RMA_STR__NAME *dst, RMA_STR__NAME *src);
 RMA_STR__STORAGE void RMA__JOIN(RMA_STR__NAME, __free )(RMA_STR__NAME *v);
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __from_cstr)(RMA_STR__NAME *v, const char *ptr);
+RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __insert)(RMA_STR__NAME *v, size_t pos, char elem);
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __pop )(RMA_STR__NAME *v, char *out);
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push)(RMA_STR__NAME *v, char elem);
+RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push_cstr)(RMA_STR__NAME *v, const char *ptr);
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push_raw_parts)(RMA_STR__NAME *v,   size_t len, const char *ptr);
+RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push_str)(RMA_STR__NAME *v, RMA_STR__NAME *other);
+RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __reserve )(RMA_STR__NAME *v, size_t cap);
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __with_capacity )(RMA_STR__NAME *out, size_t cap);
 
 static char * RMA__UNUSED
@@ -118,22 +133,12 @@ RMA__JOIN(RMA_STR__NAME, __new)(void) {
     return v;
 }
 
-static int RMA__UNUSED
-RMA__JOIN(RMA_STR__NAME, __push_str)(RMA_STR__NAME *v, RMA_STR__NAME *other) {
-    return RMA__JOIN(RMA_STR__NAME, __push_raw_parts)(v, other->len, other->ptr);
-}
-
-static int RMA__UNUSED
-RMA__JOIN(RMA_STR__NAME, __push_cstr)(RMA_STR__NAME *v, const char *ptr) {
-    return RMA__JOIN(RMA_STR__NAME, __push_raw_parts)(v, strlen(ptr), ptr);
-}
-
 #ifdef RMA_STR__IMPLEMENTATION
 
 RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __clone)(RMA_STR__NAME *dst, RMA_STR__NAME *src) {
     dst->ptr = RMA_STR__MALLOC(src->cap);
     if (!dst->ptr) {
-        return RMA__ENOMEM;
+        return RMA__OOM;
     }
     memcpy(dst->ptr, src->ptr, src->len);
     dst->cap = src->cap;
@@ -141,11 +146,65 @@ RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __clone)(RMA_STR__NAME *dst, RMA_S
     return 0;
 }
 
-RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push_raw_parts)(RMA_STR__NAME *v, size_t len, const char *ptr) {
+RMA_STR__STORAGE void RMA__JOIN(RMA_STR__NAME, __free)(RMA_STR__NAME *v) {
+    if (v) {
+        RMA_STR__FREE(v->ptr);
+    }
+}
+
+RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __from_cstr)(RMA_STR__NAME *v, const char *ptr) {
+    v->len = strlen(ptr);
+    v->ptr = RMA_STR__MALLOC(v->len + 1);
+    if (!v->ptr) {
+        return RMA__OOM;
+    }
+    strcpy(v->ptr, ptr);
+    v->cap = v->len + 1;
+    return 0;
+}
+
+RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __insert)(RMA_STR__NAME *v, size_t pos, char elem) {
+    int err;
+
+    if (pos > v->len) {
+        return RMA__OOB;
+    }
+    if (v->len >= SIZE_MAX - 1) {
+        return RMA__OOM;
+    }
+    err = RMA__JOIN(RMA_STR__NAME, __reserve)(v, v->len + 2);
+    if (err) {
+        return err;
+    }
+    memmove(v->ptr + pos + 1, v->ptr + pos, v->len - pos);
+    v->ptr[pos] = elem;
+    v->len++;
+    v->ptr[v->len] = '\0';
+    return 0;
+}
+
+RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __pop)(RMA_STR__NAME *v, char *out) { 
+    if (!v->len) {
+        return -1;
+    }
+    v->len--;
+    *out = v->ptr[v->len];
+    return 0;
+}
+
+RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __push)(RMA_STR__NAME *v, char elem) {
+    return RMA__JOIN(RMA_STR__NAME, __insert)(v, v->len, elem);
+}
+
+RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __push_cstr)(RMA_STR__NAME *v, const char *ptr) {
+    return RMA__JOIN(RMA_STR__NAME, __push_raw_parts)(v, strlen(ptr), ptr);
+}
+
+RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __push_raw_parts)(RMA_STR__NAME *v, size_t len, const char *ptr) {
     size_t new_len;
 
     if (v->len > SIZE_MAX - len - 1) {
-        return RMA__ENOMEM;
+        return RMA__OOM;
     }
     new_len = v->len + len;
     if (new_len > v->cap) {
@@ -163,7 +222,7 @@ RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push_raw_parts)(RMA_STR__NAME *
         ptr_tmp = v->cap ? v->ptr : NULL;
         ptr_tmp = RMA_STR__REALLOC(ptr_tmp, cap_new);
         if (!ptr_tmp) {
-            return RMA__ENOMEM;
+            return RMA__OOM;
         }
         v->ptr = ptr_tmp;
         v->cap = cap_new;
@@ -174,65 +233,42 @@ RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push_raw_parts)(RMA_STR__NAME *
     return 0;
 }
 
-RMA_STR__STORAGE void RMA__JOIN(RMA_STR__NAME, __free)(RMA_STR__NAME *v) {
-    if (v) {
-        RMA_STR__FREE(v->ptr);
-    }
+RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __push_str)(RMA_STR__NAME *v, RMA_STR__NAME *other) {
+    return RMA__JOIN(RMA_STR__NAME, __push_raw_parts)(v, other->len, other->ptr);
 }
 
-RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __from_cstr)(RMA_STR__NAME *v, const char *ptr) {
-    v->len = strlen(ptr);
-    v->ptr = RMA_STR__MALLOC(v->len + 1);
-    if (!v->ptr) {
-        return RMA__ENOMEM;
+RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __reserve)(RMA_STR__NAME *v, size_t cap) {
+    char  *ptr_tmp;
+    size_t cap_new;
+
+    if (cap <= v->cap) {
+        return 0;
     }
-    strcpy(v->ptr, ptr);
-    v->cap = v->len + 1;
-    return 0;
-}
-
-RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __pop)(RMA_STR__NAME *v, char *out) { 
-    if (!v->len) {
-        return -1;
-    }
-    v->len--;
-    *out = v->ptr[v->len];
-    return 0;
-}
-
-RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __push)(RMA_STR__NAME *v, char elem) {
-    if (v->len + 1 >= v->cap) {   
-        char  *ptr_tmp;  
-        size_t cap_new;
-
-        if (v->cap <= SIZE_MAX / 2) {  
-            cap_new = v->cap ? 2 * v->cap : 1;
-        } else if (v->cap < SIZE_MAX) {     
-            cap_new = SIZE_MAX;
-        } else {       
-            return RMA__ENOMEM;
+    if (cap > SIZE_MAX / 2) {
+        cap_new = SIZE_MAX;
+    } else {
+        cap_new = v->cap ? v->cap : 1;
+        while (cap_new < cap) {
+            cap_new *= 2;
         }
-        ptr_tmp = v->cap ? v->ptr : NULL;
-        ptr_tmp = RMA_STR__REALLOC(ptr_tmp, cap_new);
-        if (!ptr_tmp) {
-            return RMA__ENOMEM;
-        }
-        v->ptr = ptr_tmp;
-        v->cap = cap_new;
     }
-    v->ptr[v->len] = elem;
-    v->len++;
-    v->ptr[v->len] = '\0';
+    ptr_tmp = v->cap ? v->ptr : NULL;
+    ptr_tmp = RMA_STR__REALLOC(ptr_tmp, cap_new);
+    if (!ptr_tmp) {
+        return RMA__OOM;
+    }
+    v->ptr = ptr_tmp;
+    v->cap = cap_new;
     return 0;
 }
 
 RMA_STR__STORAGE int RMA__JOIN(RMA_STR__NAME, __with_capacity)(RMA_STR__NAME *out, size_t cap) {
     if (cap > SIZE_MAX) {
-        return RMA__ENOMEM;
+        return RMA__OOM;
     }
     out->ptr = RMA_STR__MALLOC(cap);
     if (!out->ptr) {
-        return RMA__ENOMEM;
+        return RMA__OOM;
     }
     out->cap = cap;
     out->len = 0;
