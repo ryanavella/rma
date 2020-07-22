@@ -1,4 +1,4 @@
-/* rma_str.h - 0.2.0
+/* rma_str.h - 0.2.1
 **   Safer null-terminated string type for C.
 **
 **   Dual-licensed under MIT or the UNLICENSE.
@@ -24,7 +24,8 @@
 
 #include <errno.h>  /* ENOMEM */
 #include <stddef.h> /* size_t */
-#include <string.h> /* memcpy, strcpy, strlen */
+#include <string.h> /* memcpy, memmove, strcpy, strlen */
+#include <stdint.h> /* SIZE_MAX */
 
 #ifdef _MSC_VER
 /* ignore MSVC deprecation warnings */
@@ -104,7 +105,7 @@ RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __insert)(RMA_STR__NAME *v, size_
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __pop )(RMA_STR__NAME *v, char *out);
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push)(RMA_STR__NAME *v, char elem);
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push_cstr)(RMA_STR__NAME *v, const char *ptr);
-RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push_raw_parts)(RMA_STR__NAME *v,   size_t len, const char *ptr);
+RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push_raw_parts)(RMA_STR__NAME *v, size_t len, const char *ptr);
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __push_str)(RMA_STR__NAME *v, RMA_STR__NAME *other);
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __reserve )(RMA_STR__NAME *v, size_t cap);
 RMA_STR__STORAGE int  RMA__JOIN(RMA_STR__NAME, __with_capacity )(RMA_STR__NAME *out, size_t cap);
